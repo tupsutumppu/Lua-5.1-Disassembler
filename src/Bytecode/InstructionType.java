@@ -1,5 +1,5 @@
 package Bytecode;
-
+// Actually there is only 3 types of instructions: ABC, ABx and AsBx but not all opcodes use all registers.
 public enum InstructionType {
-    ABC, ABx, AsBx
+    AB, ABx, ABC, AsBx, AC, A, sBx
 }

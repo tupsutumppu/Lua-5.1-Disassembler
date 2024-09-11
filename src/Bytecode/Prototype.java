@@ -1,8 +1,5 @@
 package Bytecode;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @SuppressWarnings("unused")
 public class Prototype {
     public Instruction[] instructions;
@@ -19,12 +16,13 @@ public class Prototype {
     public byte numParams;
     public byte varArgFlag;
     public byte maxStackSize;
-    
-    // https://github.com/CPunch/LuaPytecode/blob/63756b3bcd02dd53ac60f4f73d301a103ef3c5e1/luac.py#L73
+
+
     private String formatRK(int rk) {
         return (whichRK(rk) ? "K[" + readRKasK(rk) + "]" : "R[" + rk + "]");
     }
 
+    // Checks if value is a register or constant index
     private boolean whichRK(int rk) {
         return (rk & (1 << 8)) > 0;
     }
@@ -64,62 +62,71 @@ public class Prototype {
             String pc = String.format("[%3d]", i + 1);
             String opcodeName = String.format("%-" + 12 + "s", instruction.opcode.name());
             String A = String.format("R[%d]", instruction.A);
-            String B = String.format("R[%d]", instruction.B);
-            String C = String.format("R[%d]", instruction.C);
+            String B = "";
+            String C = "";
 
             StringBuilder constantString = new StringBuilder();
 
             switch (type) {
-                case ABC -> {
-                    if (InstructionFormats.RKBC.contains(instruction.opcode)) {
-                        B = formatRK(instruction.B);
-                        C = formatRK(instruction.C);
+                case AB -> {
+                    B = formatRK(instruction.B);
+                    C = "";
 
-                        if (whichRK(instruction.C)) {
-                            constantString.append(" ; ").append(constants[readRKasK(instruction.C)]);
-                        }
-                        if (whichRK(instruction.B)) {
-                            constantString.append(" ; ").append(constants[readRKasK(instruction.B)]);
-                        }
-                    }
-                    else if (InstructionFormats.RKC.contains(instruction.opcode)) {
-                        C = formatRK(instruction.C);
-
-                        if (whichRK(instruction.C)) {
-                            constantString.append(" ; ").append(constants[readRKasK(instruction.C)]);
-                        }
-                    }
-
-                    A = String.format("%-" + 12 + "s", A);
-                    B = String.format("%-" + 12 + "s", B);
-                    C = String.format("%-" + 12 + "s", C);
+                    if (whichRK(instruction.B))
+                        constantString.append(" ; ").append(constants[readRKasK(instruction.B)]);
                 }
-                case ABx, AsBx -> {
-                    if (InstructionFormats.KBX.contains(instruction.opcode)) {
-                        B = String.format("K[%d]", instruction.B);
-                        constantString.append(" ; ").append(constants[instruction.B]);
-                    }
-                    else {
-                        B = String.format("R[%d]", instruction.B);
-                    }
+                case ABC -> {
+                    B = formatRK(instruction.B);
+                    C = formatRK(instruction.C);
 
-                    A = String.format("%-" + 12 + "s", A);
-                    B = String.format("%-" + 12 + "s", B);
+                    if (whichRK(instruction.B))
+                        constantString.append(" ; ").append(constants[readRKasK(instruction.B)]);
+
+                    if (whichRK(instruction.C))
+                        constantString.append(" ; ").append(constants[readRKasK(instruction.C)]);
+                }
+                case ABx -> {
+                    A = String.format("R[%d]", instruction.A);
+                    C = "";
+
+                    if (instruction.opcode == Op.CLOSURE)
+                        B = String.format("R[%d]", readRKasK(instruction.B));
+                    else {
+                        B = String.format("K[%d]", readRKasK(instruction.B));
+                        constantString.append(" ; ").append(constants[readRKasK(instruction.B)]);
+                    }
+                }
+                case AsBx -> {
+                    A = String.format("R[%d]", instruction.A);
+                    B = String.format("%d", instruction.B);
                     C = "";
                 }
-                default -> throw new IllegalArgumentException("Unknown instruction type!");
+                case AC -> {
+                    C = formatRK(instruction.C);
+                    B = "";
+
+                    if (whichRK(instruction.C))
+                        constantString.append(" ; ").append(constants[readRKasK(instruction.C)]);
+                }
+                case sBx -> {
+                    A = "";
+                    B = String.format("%d", instruction.B);
+                    C = "";
+
+                    if (instruction.opcode == Op.JMP)
+                        constantString.append(" ; ").append(String.format("to pc %d", instruction.B + (i + 2)));
+                }
             }
 
-            System.out.printf("%s%-" + 5 + "s\t%-" + 12 + "s%-" + 12 + "s%-" + 12 + "s%-" + 12 + "s%s%n",
+            System.out.printf("%s%-5s\t%-12s%-12s%-12s%-12s%s%n",
                     indentation, pc, opcodeName, A, B, C, constantString);
 
-            if (instruction.opcode == Opcodes.CLOSURE) {
+            if (instruction.opcode == Op.CLOSURE) {
                 Prototype proto = prototypes[instruction.B];
-
                 String protoName = String.format("UNNAMED_PROTO_%d", instruction.B);
 
                 System.out.printf("%sfunction %s(%s)%n", indentation, protoName, proto.getArgsString());
-                prototypes[instruction.B].print(level + 1);
+                proto.print(level + 1);
                 System.out.printf("%send%n", indentation);
             }
         }
