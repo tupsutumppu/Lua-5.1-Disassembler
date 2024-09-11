@@ -1,4 +1,5 @@
 Just a simple disassembler I wrote to learn a bit about Lua bytecode. It's definitely not good by any means, but that wasn't the goal.
+Debug information is not used.
 
 Produces output like this:
 
