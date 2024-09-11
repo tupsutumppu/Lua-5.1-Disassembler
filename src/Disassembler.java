@@ -1,99 +1,65 @@
-import Bytecode.Instruction;
-import Bytecode.Local;
-import Bytecode.Prototype;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
+import Bytecode.*;
 
 @SuppressWarnings("unused")
 public class Disassembler {
-    private final ByteBuffer bytecode;
-    private final byte version;
-    private final byte format;
-    private final byte endian;
-    private final byte intSize;
-    private final byte sizeT;
-    private final byte instrSize;
-    private final byte lNumSize;
-    private final byte integralFlag;
+    private final Reader reader;
 
     public Disassembler(byte[] bytes) {
-        this.bytecode = ByteBuffer.wrap(bytes);
+        this.reader = new Reader(bytes);
 
-        if (!readString(4).equals("\u001BLua"))
-                throw new IllegalArgumentException("Lua bytecode expected!");
-
-        this.version = readByte();
-        this.format = readByte();
-        this.endian = readByte();
-        this.intSize = readByte();
-        this.sizeT = readByte();
-        this.instrSize = readByte();
-        this.lNumSize = readByte();
-        this.integralFlag = readByte();
-
-        System.out.printf("Integer size: %d bytes%n", intSize);
-        System.out.printf("Long size: %d bytes%n", lNumSize);
-        System.out.printf("Endian: %s%n%n", endian == 0 ? "BIG_ENDIAN" : "LITTLE_ENDIAN");
-
-        if (version != 0x51)
-            throw new IllegalArgumentException("Expected Lua 5.1 bytecode!");
-
-        bytecode.order(endian == 0 ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
     }
 
     public Prototype disassemble() {
         Prototype proto = new Prototype();
 
-        proto.name = readString();
-        proto.firstLine = readInt();
-        proto.lastLine = readInt();
-        proto.numUpvals = readByte();
-        proto.numParams = readByte();
-        proto.varArgFlag = readByte();
-        proto.maxStackSize = readByte();
+        proto.name = reader.readString();
+        proto.firstLine = reader.readInt();
+        proto.lastLine = reader.readInt();
+        proto.numUpvals = reader.readByte();
+        proto.numParams = reader.readByte();
+        proto.varArgFlag = reader.readByte();
+        proto.maxStackSize = reader.readByte();
 
-        proto.instructions = readInstructions();
-        proto.constants = readConstants();
-        proto.prototypes = readPrototypes();
-        proto.lines = readDebugLines();
-        proto.locals = readDebugLocals();
-        proto.upvalues = readDebugUpvalues();
+        proto.instructions = getInstructions();
+        proto.constants = getConstants();
+        proto.prototypes = getPrototypes();
+        proto.lines = getDebugLines();
+        proto.locals = getDebugLocals();
+        proto.upvalues = getDebugUpvalues();
 
         return proto;
     }
 
-    private Instruction[] readInstructions() {
-        int instructionCount = readInt();
+    private Instruction[] getInstructions() {
+        int instructionCount = reader.readInt();
         Instruction[] instructions = new Instruction[instructionCount];
 
         for (int i = 0; i < instructionCount; i++) {
-            instructions[i] = new Instruction(readInt());
+            instructions[i] = new Instruction(reader.readInt());
         }
         return instructions;
     }
 
-    private String[] readConstants() {
-        int constantCount = readInt();
+    private String[] getConstants() {
+        int constantCount = reader.readInt();
         String[] constants = new String[constantCount];
 
         for (int i = 0; i < constantCount; i++) {
-            byte type = readByte();
+            byte type = reader.readByte();
 
             switch (type) {
                 case 0 -> constants[i] = "nil";
-                case 1 -> constants[i] = readByte() != 0 ? "true" : "false";
-                case 3 -> constants[i] = Double.toString(readDouble());
-                case 4 -> constants[i] = readString();
+                case 1 -> constants[i] = reader.readByte() != 0 ? "true" : "false";
+                case 3 -> constants[i] = Double.toString(reader.readDouble());
+                case 4 -> constants[i] = reader.readString();
                 default -> throw new IllegalArgumentException("Unknown constant type!");
             }
         }
         return constants;
     }
 
-    private Prototype[] readPrototypes() {
-        int protoCount = readInt();
+    private Prototype[] getPrototypes() {
+        int protoCount = reader.readInt();
         Prototype[] prototypes = new Prototype[protoCount];
 
         for (int i = 0; i < protoCount; i++) {
@@ -102,81 +68,33 @@ public class Disassembler {
         return prototypes;
     }
 
-    private int[] readDebugLines() {
-        int lineCount = readInt();
+    private int[] getDebugLines() {
+        int lineCount = reader.readInt();
         int[] lines = new int[lineCount];
 
         for (int i = 0; i < lineCount; i++) {
-            lines[i] = readInt();
+            lines[i] = reader.readInt();
         }
         return lines;
     }
 
-    private Local[] readDebugLocals() {
-        int localCount = readInt();
+    private Local[] getDebugLocals() {
+        int localCount = reader.readInt();
         Local[] locals = new Local[localCount];
 
         for (int i = 0; i < localCount; i++) {
-            locals[i] = new Local(readString(), readInt(), readInt());
+            locals[i] = new Local(reader.readString(), reader.readInt(), reader.readInt()); // name, start, end
         }
         return locals;
     }
 
-    private String[] readDebugUpvalues() {
-        int upvalCount = readInt();
+    private String[] getDebugUpvalues() {
+        int upvalCount = reader.readInt();
         String[] upvalues = new String[upvalCount];
 
         for (int i = 0; i < upvalCount; i++) {
-            upvalues[i] = readString();
+            upvalues[i] = reader.readString();
         }
         return upvalues;
-    }
-
-    private byte readByte() {
-        return bytecode.get();
-    }
-
-    private int readInt() {
-        byte[] bytes = new byte[intSize];
-        bytecode.get(bytes);
-
-        int result = 0;
-        for (int i = 0; i < intSize; i++) {
-            result |= (bytes[i] & 0xFF) << (i * 8);
-        }
-        return result;
-    }
-
-    private long readLong() {
-        byte[] bytes = new byte[lNumSize];
-        bytecode.get(bytes);
-
-        long result = 0;
-        for (int i = 0; i < lNumSize; i++) {
-            result |= ((long) (bytes[i] & 0xFF) << (i * 8));
-        }
-        return result;
-    }
-
-    private double readDouble() {
-        return bytecode.getDouble();
-    }
-
-    private String readString(long len) {
-        if (len == 0)
-            len = sizeT == 4 ? readInt() : readLong();
-        if (len > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("Length exceeds max array size!");
-        if (bytecode.remaining() < len)
-            throw new IllegalArgumentException("Not enough data in the buffer to read the string!");
-
-        byte[] bytes = new byte[(int) len];
-        bytecode.get(bytes);
-
-        return new String(bytes, StandardCharsets.UTF_8).replace("\0", "");
-    }
-
-    private String readString() {
-        return readString(0);
     }
 }
