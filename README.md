@@ -1,6 +1,5 @@
-Just a simple disassembler I wrote to learn a bit about Lua bytecode. It's definitely not good by any means, but that wasn't the goal.
-
-Debug information is not used.
+# Lua 5.1 Bytecode Disassembler
+A disassembler I wrote in Java to learn how Lua bytecode works. It is not perfect by any means, but it's not supposed to be.
 
 Produces output like this:
 
